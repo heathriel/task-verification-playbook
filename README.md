@@ -72,6 +72,18 @@ Creates a completion artifact template with verification scorecard.
 ```
 Analyzes your completion artifacts for quality trends over time.
 
+### Inspect Local Evidence
+```bash
+python3 tools/check-evidence.py --root examples/evidence --manifest manifest.json
+```
+Optional read-only checks bind local artifact bytes to explicit criteria and flag
+missing, mismatched, or stale evidence. Matching a record does not prove the event
+it describes. Human review and authorization remain separate; exit 0 is not task
+acceptance. Existing quality scores are unchanged.
+
+See [Evidence Checks](EVIDENCE-CHECKS.md) for the manifest, scoped status meanings,
+POSIX/Python requirements, synthetic example, and limitations.
+
 ## Real Examples
 
 ### Good Completion (9.75/10)

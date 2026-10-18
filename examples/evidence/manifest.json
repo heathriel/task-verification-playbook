@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "task": "Review a synthetic test report",
+  "recorded_at": "2026-10-18T00:00:00Z",
+  "valid_until": "2026-10-19T00:00:00Z",
+  "criteria": [
+    {
+      "id": "report-count",
+      "claim": "The recorded report contains three passing tests; execution is not attested",
+      "kind": "json_equals",
+      "path": "test-report.json",
+      "sha256": "bad149350b1504cb9839d3310d03cb77dfc0fb27da984856e0aad9d450075ca1",
+      "pointer": "/passed",
+      "expected": 3
+    },
+    {
+      "id": "adequacy",
+      "claim": "The tests exercise the actual requested behavior and were run against the reviewed revision",
+      "kind": "human_review"
+    }
+  ]
+}
