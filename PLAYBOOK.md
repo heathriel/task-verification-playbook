@@ -387,30 +387,20 @@ echo "Created: $ARTIFACT"
 
 ### Quality Trend Tracker
 
+Run the maintained tracker from the repository root:
+
 ```bash
-#!/bin/bash
-# quality-trend.sh
-# Analyzes completion artifacts for quality trends
-
-echo "=== Quality Trend Analysis ==="
-echo
-
-# Extract quality scores from last 30 days
-find work-records/completions -name "*.md" -mtime -30 \
-  | xargs grep "Overall:" \
-  | awk -F: '{print $NF}' \
-  | awk '{sum+=$1; count++} END {print "Average: " sum/count}'
-
-# Count completions
-echo "Total completions: $(find work-records/completions -name "*.md" -mtime -30 | wc -l)"
-
-# Recent low scores
-echo
-echo "=== Recent Low Scores (<8.0) ==="
-find work-records/completions -name "*.md" -mtime -7 \
-  | xargs grep -l "Overall: [0-7]\." \
-  | head -5
+./tools/quality-trend.sh
 ```
+
+The [tracker](tools/quality-trend.sh) reports 7-day and 30-day windows based on
+artifact modification time. It averages the first standalone `Overall:` score
+in each artifact when that score is numeric and in the range 0–10 (plain or
+bold Markdown, for example `**Overall: 9.75/10**`). Blank templates, `N/A`
+blocked results, and malformed scores are reported as unscored and excluded
+from averages and low-score lists. Artifact counts do not certify completion;
+verification still requires review.
+
 
 ---
 

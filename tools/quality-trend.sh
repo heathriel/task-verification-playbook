@@ -7,15 +7,33 @@ echo
 
 ARTIFACT_DIR="work-records/completions"
 
-# Check if directory exists
 if [ ! -d "$ARTIFACT_DIR" ]; then
     echo "❌ No artifacts directory found at: $ARTIFACT_DIR"
     echo "💡 Tip: Create artifacts using generate-scorecard.sh"
     exit 1
 fi
 
-# Count artifacts
-TOTAL_COUNT=$(find "$ARTIFACT_DIR" -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+# Read at most one score per artifact. Blank templates, blocked tasks, and
+# malformed/out-of-range scores are unscored, not zero-quality completions.
+read_score() {
+    awk '
+        /^[[:space:]]*(\*\*)?Overall:[[:space:]]*/ {
+            sub(/^[[:space:]]*(\*\*)?Overall:[[:space:]]*/, "")
+            sub(/[[:space:]]*$/, "")
+            sub(/\*\*$/, "")
+            if ($0 ~ /^[0-9]+([.][0-9]+)?\/10$/) {
+                sub(/\/10$/, "")
+                if ($0 + 0 >= 0 && $0 + 0 <= 10) print $0
+            }
+            exit
+        }
+    ' "$1"
+}
+
+TOTAL_COUNT=0
+while IFS= read -r -d '' file; do
+    TOTAL_COUNT=$((TOTAL_COUNT + 1))
+done < <(find "$ARTIFACT_DIR" -type f -name "*.md" -print0)
 
 if [ "$TOTAL_COUNT" -eq 0 ]; then
     echo "❌ No completion artifacts found"
@@ -23,46 +41,46 @@ if [ "$TOTAL_COUNT" -eq 0 ]; then
     exit 0
 fi
 
-echo "📊 Total completions: $TOTAL_COUNT"
+echo "📊 Total artifacts: $TOTAL_COUNT"
 echo
 
-# Last 30 days average
-RECENT_COUNT=$(find "$ARTIFACT_DIR" -name "*.md" -mtime -30 2>/dev/null | wc -l | tr -d ' ')
-if [ "$RECENT_COUNT" -gt 0 ]; then
-    echo "📅 Last 30 days: $RECENT_COUNT completions"
-    RECENT_AVG=$(find "$ARTIFACT_DIR" -name "*.md" -mtime -30 2>/dev/null \
-      | xargs grep "Overall:" 2>/dev/null \
-      | awk -F: '{print $NF}' \
-      | awk '{gsub(/\/10/, ""); sum+=$1; count++} END {if(count>0) printf "%.2f", sum/count; else print "N/A"}')
-    echo "⭐ Average quality score: $RECENT_AVG/10"
-    echo
-fi
+LOW_SCORES=()
+report_window() {
+    local days=$1 count=0 scored=0 file score average
+    local scores=()
+    while IFS= read -r -d '' file; do
+        count=$((count + 1))
+        score=$(read_score "$file")
+        if [ -n "$score" ]; then
+            scores+=("$score")
+            scored=$((scored + 1))
+            if [ "$days" -eq 7 ] && [ "${#LOW_SCORES[@]}" -lt 5 ] &&
+                awk -v score="$score" 'BEGIN {exit !(score < 8)}'; then
+                LOW_SCORES+=("${file##*/}: $score/10")
+            fi
+        fi
+    done < <(find "$ARTIFACT_DIR" -type f -name "*.md" -mtime "-$days" -print0)
 
-# Last 7 days
-WEEK_COUNT=$(find "$ARTIFACT_DIR" -name "*.md" -mtime -7 2>/dev/null | wc -l | tr -d ' ')
-if [ "$WEEK_COUNT" -gt 0 ]; then
-    echo "📅 Last 7 days: $WEEK_COUNT completions"
-    WEEK_AVG=$(find "$ARTIFACT_DIR" -name "*.md" -mtime -7 2>/dev/null \
-      | xargs grep "Overall:" 2>/dev/null \
-      | awk -F: '{print $NF}' \
-      | awk '{gsub(/\/10/, ""); sum+=$1; count++} END {if(count>0) printf "%.2f", sum/count; else print "N/A"}')
-    echo "⭐ Average quality score: $WEEK_AVG/10"
-    echo
-fi
+    if [ "$count" -gt 0 ]; then
+        echo "📅 Last $days days: $count artifacts ($scored scored, $((count - scored)) unscored)"
+        if [ "$scored" -gt 0 ]; then
+            average=$(printf '%s\n' "${scores[@]}" | awk '{sum += $1} END {printf "%.2f", sum/NR}')
+            echo "⭐ Average quality score: $average/10"
+        else
+            echo "⭐ Average quality score: N/A (no numeric scores)"
+        fi
+        echo
+    fi
+}
 
-# Recent low scores (<8.0)
+report_window 30
+report_window 7
+
 echo "🔍 Recent tasks needing review (<8.0):"
-LOW_SCORES=$(find "$ARTIFACT_DIR" -name "*.md" -mtime -7 2>/dev/null \
-  | xargs grep -l "Overall: [0-7]\." 2>/dev/null \
-  | head -5)
-
-if [ -z "$LOW_SCORES" ]; then
-    echo "   ✅ None found - all recent tasks scored ≥8.0"
+if [ "${#LOW_SCORES[@]}" -eq 0 ]; then
+    echo "   No numeric scores below 8.0 found; unscored artifacts are excluded."
 else
-    echo "$LOW_SCORES" | while read file; do
-        SCORE=$(grep "Overall:" "$file" | awk -F: '{print $NF}')
-        echo "   📄 $(basename "$file"): $SCORE"
-    done
+    printf '   📄 %s\n' "${LOW_SCORES[@]}"
 fi
 
 echo
